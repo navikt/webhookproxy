@@ -48,6 +48,22 @@ func (s *server) handler(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+func (s *server) isAlive(w http.ResponseWriter, r *http.Request) error {
+	w.WriteHeader(200)
+	w.Header().Set("content-type", "text/plain")
+	w.Write([]byte("is alive"))
+
+	return nil
+}
+
+func (s *server) isReady(w http.ResponseWriter, r *http.Request) error {
+	w.WriteHeader(200)
+	w.Header().Set("content-type", "text/plain")
+	w.Write([]byte("is ready"))
+
+	return nil
+}
+
 type httpErrorHandlerWrapper func(w http.ResponseWriter, r *http.Request) error
 
 func (fn httpErrorHandlerWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +79,9 @@ func main() {
 		listenAddr = ":8080"
 	}
 
-	autoIndex := &server{}
-	http.Handle("/", httpErrorHandlerWrapper(autoIndex.handler))
+	server := &server{}
+	http.Handle("/isAlive", httpErrorHandlerWrapper(server.isAlive))
+	http.Handle("/isReady", httpErrorHandlerWrapper(server.isReady))
+	http.Handle("/", httpErrorHandlerWrapper(server.handler))
 	panic(http.ListenAndServe(listenAddr, nil))
 }
