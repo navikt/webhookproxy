@@ -4,6 +4,7 @@ RUN mkdir /app
 ADD . /app/
 WORKDIR /app
 
+RUN go test -v ./...
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main -v
 
 FROM scratch

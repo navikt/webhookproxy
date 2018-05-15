@@ -1,0 +1,28 @@
+sudo: required
+language: go
+go:
+- '1.9'
+services:
+- docker
+addons:
+  apt:
+    packages:
+    - docker-ce
+env:
+  global:
+  - secure: jAnR7I+e/dxI3ZKcVO3aEGVCb2VEa6KgJ9BrRxYz+jvxiygwmOFD4/jZPouOTKZs6EGNowKR2N60MlkI+EP2LX0zLuiaXd1x5di76t2bNSmRXzz0vR+nq7jv2/SGnm+j+9/mlqqzkS42BucvA0z48djjMdCkz7U+zKCVNxm029Zba2IXs6tuiewaRXD6nzT1RWNo6SCpPz3ShXEDEyODaBygOiUJKsOQT4IXRoZFNaVx8hfgLXuYK4fcfXfpmRgReun6lZ3zaiaiMA13KSziOXAaHk2TvVnSN40Sb8xtxBRtNyF8ZycCWPfoNj5ZnwfMTue+cmGGrUNB5bBXeFu0p2y287RnI9GDlqBoY8c+Z0x7IwZ+yFCDCjRylYONarSpVQoZO0LNKWmqHiqpzrGq1t/Vc7utvXfPCqsBFk9PwZaVQWBYR82DTvHu5o6/LfqG3nSR3Ulyrz1qUgfcuQoGfNaoeN+4MGMaTbTBPVnGR0iddeFA6dk4P5UMaBwi9gMM/+JztkLhW3QIvdjFFe7PXxo2NYiOTI+tTSNy/X2LZShGmkv7zssNd4DAwPgpL159raL/WfJFoaU9uTbDP7lf9MRd/Fcy58wVvVYVPPYhC5rXsxpUDAjx2+wLtvuWXrJ2eNumqWoKGT+/R9nZNLhzUCop16VU2UBhL90e61w9j0A=
+  - secure: PzoY0JzDYxZuHpAKzzuJI1r944W9n6L5wDT/mBK0psKntDqmkWMF9CqAhnM8+Lx8RkNi+4TTZRhbrPYOzlqsmtLCBGbc/LuZhdEX+uvYjnOOZRoyxTltXrextBbtn4LpWpetHjmJNTAlP+f3eOVELZ8ZZ5QXkvMMllvGBrALyoTVVifwR3zHzdqaWTqoX1fZenjINC4Jvf95PUoTUjo1YKz79GUJvuwZxU9xGgooME4+klUcc2oR/Dg/cDhXXJH4HOEaz7lk2ArHDi8TZw7bzl6kLCQgqfJE5SHzCIiRLMi5qBLl7zSeoMSXIZC3k4CO6BYYV9CGfpVqNPI5uzY6Cn98a+fXoqddi0sr+UnolDeBAnxMaDx8WAFstfP9cvLKx0ZMY0z5T0c9jMCrG72WecZqezuhaAYLcT1gdkbLl5ftcEGLd6rO6AKpIfBig0oiozHLGyVHx7nwi3mlhkafIzen9RxKMOtp2GTB5DklfncYarkAo+dNVrq5HVUMJCXHMSP3qhq2MicH364FfLW4UYyHQk3Rx5EN+FLnCDk+fNAbsb6j99RbE92dzk4bk/xNFwlaurgH/3AIZBaPpJ9g3WqiyzdGCn/CI+6zoq0Aqg8utGmb64wKo/QDpDb3W2GjVP5s1iwOYSDFh8Lj+n5yKK+1sRV6PQhkbX1CcXoO4ZU=
+  - secure: Hqkg5Tsy+33oYOw88VXUZfW5KULInd2AIzpsUvg6EseqGcBoOv30p0CQNEEi3ykn/vvWw+yfUuelu7tEYcnrcq9o+Lwz75qsE2ZfqLDbR65NhVydJpJbcCTUtqEa5nZGVDnu+hP+sYmVZZV7xg8qga0+Fut+hv2BOBSO10vTaOmjOGGt5Oe7vaBFZHF9n+QdJOEDeufwCluBjBRmB0SKI8YedwnHsUNMQNqtxZQGbIgAxVAQFBoo0omuR3pEvKkS09RdZ1vJR9uFYAlYiIN6/ifvNTN0lsOnqoi6EFGMMGEZKLFjR0ouBXtgzAumqoDsdw8BvjYw/Pa/xYaF8TskHfhl2qZfW5VUhYTRwmBWSXSaNhvKAmCUEfiAW3lLuVy89GjyYlSCFKXBo4GZIpq50hagOK46/dSzTk/MBrqM335BXsbqLsPnnbduKnCPXi4Uo+Gs8x8JUJ9uVhHu96GKG+6aCh5GhHwtJHoQ6H3ys1tI4ybGVmVIZj2xs3p/huO7Fi/BWnKUfMTCjNqgwXSzIRYnzLjhBS4V4mjsf7mWbcojKTUxHX8yUgMJq4ZQKrj2lFq5AAneQBK/rEruPWGREYQ7IZoqR+9RGFWb7/Cv6DkzmcHfR3KF55etj68IsMPb14pL0zly18hJDB/A3p48JmXCk2lz39/RXGSGJ6UYcTU=
+before_install:
+- make bump-version
+after_success:
+  - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  - git config --local user.name navikt-ci
+  - git config --local user.email 32665735+navikt-ci@users.noreply.github.com
+  - make release
+  - git push --tags https://$GH_TOKEN@github.com/navikt/webhookproxy HEAD:master
+branches:
+  only:
+  - master
+notifications:
+  email: false
