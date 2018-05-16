@@ -1,13 +1,16 @@
 DOCKER  := docker
 VERSION := $(shell cat ./VERSION)
 
-.PHONY: all release build bump-version docker-push tag
+.PHONY: all release build run bump-version docker-push tag
 
 all: build
 release: tag docker-push
 
 build:
 	$(DOCKER) build -t navikt/webhookproxy -t navikt/webhookproxy:$(VERSION) .
+
+run:
+	$(DOCKER) run --rm -it -p 8080:8080 navikt/webhookproxy
 
 bump-version:
 	@echo $$(($$(cat ./VERSION) + 1)) > ./VERSION

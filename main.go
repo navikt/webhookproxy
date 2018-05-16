@@ -4,73 +4,47 @@ import (
 	"net/http"
 	"fmt"
 	"os"
-	"io/ioutil"
-	"io"
+	"github.com/navikt/webhookproxy/middlewares"
 )
+
+type appError struct {
+	status  int
+	message string
+}
+
+func (a appError) Status() int {
+	return a.status
+}
+
+func (a appError) Error() string {
+	return a.message
+}
 
 type server struct {}
 
-type delegatedWriter struct {
-	writers []io.Writer
-}
+type appHandlerFunc func(w http.ResponseWriter, r *http.Request) error
 
-func (d delegatedWriter) Write(p []byte) (n int, err error) {
-	for _, writer := range d.writers {
-		n, err := writer.Write(p)
-		if err != nil {
-			return n, err
+func (originalFn appHandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if err := originalFn(w, r); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+
+		switch err := err.(type) {
+		case appError:
+			http.Error(w, err.Error(), err.Status())
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
-	return n, nil
 }
 
-func (s *server) handler(w http.ResponseWriter, r *http.Request) error {
-	w.WriteHeader(200)
-	w.Header().Set("content-type", "text/plain")
-
-	body, err := ioutil.ReadAll(r.Body)
-	defer r.Body.Close()
-	if err != nil {
-		return err
+func Handler(appHandler appHandlerFunc, middlewareHandlers ...middlewares.Middleware) http.Handler {
+	h := http.Handler(appHandler)
+	for _, middleware := range middlewareHandlers {
+		h = middleware(h)
 	}
-
-	dw := delegatedWriter{[]io.Writer{os.Stdout, w}}
-
-	fmt.Fprintf(dw, "%v %v %v\n", r.Proto, r.Method, r.URL)
-	fmt.Fprintf(dw, "Remote addr: %v\n", r.RemoteAddr)
-	fmt.Fprintln(dw, "Headers:")
-	for key, val := range r.Header {
-		fmt.Fprintf(dw, "%v: %v\n", key, val)
-	}
-	fmt.Fprintln(dw, "\nBody:")
-	dw.Write(body)
-
-	return nil
-}
-
-func (s *server) isAlive(w http.ResponseWriter, r *http.Request) error {
-	w.WriteHeader(200)
-	w.Header().Set("content-type", "text/plain")
-	w.Write([]byte("is alive"))
-
-	return nil
-}
-
-func (s *server) isReady(w http.ResponseWriter, r *http.Request) error {
-	w.WriteHeader(200)
-	w.Header().Set("content-type", "text/plain")
-	w.Write([]byte("is ready"))
-
-	return nil
-}
-
-type httpErrorHandlerWrapper func(w http.ResponseWriter, r *http.Request) error
-
-func (fn httpErrorHandlerWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if err := fn(w, r); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	}
+	h = middlewares.ReadRequestBodyHandler(h)
+	h = middlewares.LogHandler(h)
+	return h
 }
 
 func main() {
@@ -80,8 +54,12 @@ func main() {
 	}
 
 	server := &server{}
-	http.Handle("/isAlive", httpErrorHandlerWrapper(server.isAlive))
-	http.Handle("/isReady", httpErrorHandlerWrapper(server.isReady))
-	http.Handle("/", httpErrorHandlerWrapper(server.handler))
+
+	http.Handle("/isAlive", Handler(server.isAlive))
+	http.Handle("/isReady", Handler(server.isReady))
+	http.Handle("/new", Handler(server.newWebhook, middlewares.MustHaveMethod("POST")))
+	http.Handle("/hook/", Handler(server.proxyHook, middlewares.MustHaveValidSignature,
+		middlewares.MustHaveHeader("X-Github-Event"), middlewares.MustHaveMethod("POST")))
+
 	panic(http.ListenAndServe(listenAddr, nil))
 }

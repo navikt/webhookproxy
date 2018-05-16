@@ -1,12 +1,11 @@
 FROM golang:1.9 as builder
 
-RUN mkdir /app
-ADD . /app/
-WORKDIR /app
+WORKDIR /go/src/github.com/navikt/webhookproxy
+COPY . .
 
 RUN go test -v ./...
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main -v
+RUN CGO_ENABLED=0 GOOS=linux go install -a -installsuffix cgo -v
 
 FROM scratch
-COPY --from=builder /app/main /
-CMD ["/main"]
+COPY --from=builder /go/bin/webhookproxy /
+CMD ["/webhookproxy"]
