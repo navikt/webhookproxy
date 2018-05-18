@@ -19,12 +19,21 @@ type Webhook struct {
 	Name     string `json:"name"`
 	Team     string `json:"team"`
 	Url      string `json:"url"`
-	Secret   []byte `json:"secret"`
+	Secret   []byte `json:"-"`
 	ProxyUrl string `json:"proxy_url"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 var webhooks = map[string]*Webhook{}
+
+func List() []*Webhook {
+	//var list []*Webhook
+	list := make([]*Webhook, 0)
+	for _, v := range webhooks {
+		list = append(list, v)
+	}
+	return list
+}
 
 func Lookup(team string, name string) *Webhook {
 	return Get(getId(team, name))

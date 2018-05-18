@@ -10,7 +10,6 @@ import (
 type requestContextKey int
 const (
 	requestBodyKey requestContextKey = iota
-	signatureKey
 	webhookKey
 )
 
@@ -27,14 +26,6 @@ func NewContextWithRequestBody(ctx context.Context, r *http.Request) (context.Co
 
 func RequestBodyFromContext(ctx context.Context) []byte {
 	return ctx.Value(requestBodyKey).([]byte)
-}
-
-func NewContextWithSignature(ctx context.Context, signature []byte) context.Context {
-	return context.WithValue(ctx, signatureKey, signature)
-}
-
-func SignatureFromContext(ctx context.Context) []byte {
-	return ctx.Value(signatureKey).([]byte)
 }
 
 func NewContextWithWebhook(ctx context.Context,webhook *webhook.Webhook) context.Context {

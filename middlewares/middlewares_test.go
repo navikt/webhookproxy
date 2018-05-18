@@ -9,211 +9,19 @@ import (
 	"encoding/hex"
 	"github.com/navikt/webhookproxy/webhook"
 	"strings"
+	"github.com/gorilla/mux"
 )
 
-func TestMustHaveHeader(t *testing.T) {
-	t.Run("Empty headers should fail", func(t *testing.T) {
-		dummyHandler := http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
-			t.Errorf("MustHaveHeader() should not call next handler in chain")
-		})
-
-		middleware := MustHaveHeader("X-Header")
-		handler := middleware(dummyHandler)
-
-		w := httptest.NewRecorder()
-		r := httptest.NewRequest("POST", "/", nil)
-
-		handler.ServeHTTP(w, r)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("MustHaveHeader() should set http code to %v", http.StatusBadRequest)
-			return
-		}
-
-		if w.Body.String() != "missing required header X-Header\n" {
-			t.Errorf("MustHaveHeader() should set body to <%v>, was <%v>", "missing required header X-Header", w.Body.String())
-			return
-		}
-	})
-	t.Run("Non-empty headers should pass", func(t *testing.T) {
-		nextHandlerCalled := false
-		dummyHandler := http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
-			nextHandlerCalled = true
-		})
-
-		middleware := MustHaveHeader("X-Header")
-		handler := middleware(dummyHandler)
-
-		w := httptest.NewRecorder()
-		r := httptest.NewRequest("POST", "/", nil)
-		r.Header.Set("X-Header", "foo")
-
-		handler.ServeHTTP(w, r)
-
-		if !nextHandlerCalled {
-			t.Errorf("MustHaveHeader() should call next handler in chain")
-			return
-		}
-
-		if w.Code != http.StatusOK {
-			t.Errorf("MustHaveHeader() should not set http code to %v", w.Code)
-			return
-		}
-	})
-}
-
-func TestMustHaveMethod(t *testing.T) {
-	for _, method := range []string{"GET", "OPTIONS", "HEAD"} {
-		t.Run("Method "+method+" is not POST and should fail", func(t *testing.T) {
-			dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				t.Errorf("MustHaveHeader() should not call next handler in chain")
-			})
-
-			middleware := MustHaveMethod("POST")
-			handler := middleware(dummyHandler)
-
-			w := httptest.NewRecorder()
-
-			r := httptest.NewRequest(method, "/", nil)
-
-			handler.ServeHTTP(w, r)
-
-			if w.Code != http.StatusMethodNotAllowed {
-				t.Errorf("MustHaveMethod() should set http code to %v", http.StatusMethodNotAllowed)
-				return
-			}
-
-			if w.Body.String() != "expected POST\n" {
-				t.Errorf("MustHaveMethod() should set body to <%v>, was <%v>", "expected POST", w.Body.String())
-				return
-			}
-		})
+func checkResponseCode(t *testing.T, expected, actual int) {
+	if expected != actual {
+		t.Errorf("Expected response code %d. Got %d\n", expected, actual)
 	}
-
-	t.Run("Method POST should pass", func(t *testing.T) {
-		nextHandlerCalled := false
-		dummyHandler := http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
-			nextHandlerCalled = true
-		})
-
-		middleware := MustHaveMethod("POST")
-		handler := middleware(dummyHandler)
-
-		w := httptest.NewRecorder()
-		r := httptest.NewRequest("POST", "/", nil)
-
-		handler.ServeHTTP(w, r)
-
-		if !nextHandlerCalled {
-			t.Errorf("MustHaveMethod() should call next handler in chain")
-			return
-		}
-
-		if w.Code != http.StatusOK {
-			t.Errorf("MustHaveMethod() should not set http code to %v", w.Code)
-			return
-		}
-	})
 }
 
-func TestMustHaveSignature(t *testing.T) {
-	t.Run("Empty headers should fail", func(t *testing.T) {
-		dummyHandler := http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
-			t.Errorf("MustHaveSignature() should not call next handler in chain")
-		})
-
-		handler := MustHaveSignature(dummyHandler)
-
-		w := httptest.NewRecorder()
-		r := httptest.NewRequest("POST", "/", nil)
-
-		handler.ServeHTTP(w, r)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("MustHaveSignature() should set http code to %v", http.StatusBadRequest)
-			return
-		}
-
-		if w.Body.String() != "missing required header X-Hub-Signature\n" {
-			t.Errorf("MustHaveSignature() should set body to <%v>, was <%v>", "missing required header X-Hub-Signature", w.Body.String())
-			return
-		}
-	})
-	t.Run("Invalid header should fail", func(t *testing.T) {
-		dummyHandler := http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
-			t.Errorf("MustHaveSignature() should not call next handler in chain")
-		})
-
-		handler := MustHaveSignature(dummyHandler)
-
-		w := httptest.NewRecorder()
-		r := httptest.NewRequest("POST", "/", nil)
-		r.Header.Set("X-Hub-Signature", "foo")
-
-		handler.ServeHTTP(w, r)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("MustHaveSignature() should set http code to %v", http.StatusBadRequest)
-			return
-		}
-
-		if w.Body.String() != "malformed signature header\n" {
-			t.Errorf("MustHaveSignature() should set body to <%v>, was <%v>", "malformed signature header", w.Body.String())
-			return
-		}
-	})
-	t.Run("Invalid algo should fail", func(t *testing.T) {
-		dummyHandler := http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
-			t.Errorf("MustHaveSignature() should not call next handler in chain")
-		})
-
-		handler := MustHaveSignature(dummyHandler)
-
-		w := httptest.NewRecorder()
-		r := httptest.NewRequest("POST", "/", nil)
-		r.Header.Set("X-Hub-Signature", "sha2=aebfc")
-
-		handler.ServeHTTP(w, r)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("MustHaveSignature() should set http code to %v", http.StatusBadRequest)
-			return
-		}
-
-		if w.Body.String() != "malformed signature header, unknown algo\n" {
-			t.Errorf("MustHaveSignature() should set body to <%v>, was <%v>", "malformed signature header, unknown algo", w.Body.String())
-			return
-		}
-	})
-	t.Run("Signature should be put in context", func(t *testing.T) {
-		givenSignature := "413a5a5e9bf8651218acaffb55a66b06f9b6eb50"
-		nextHandlerCalled := false
-
-		dummyHandler := http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
-			nextHandlerCalled = true
-
-			signature := context.SignatureFromContext(r.Context())
-
-			if hex.EncodeToString(signature) != givenSignature {
-				t.Errorf("MustHaveSignature() should set signature in request context to <%v>, was <%v>", givenSignature, hex.EncodeToString(signature))
-				return
-			}
-		})
-
-		handler := MustHaveSignature(dummyHandler)
-
-		w := httptest.NewRecorder()
-		r := httptest.NewRequest("POST", "/", nil)
-
-		r.Header.Set("X-Hub-Signature", "sha1=" + givenSignature)
-
-		handler.ServeHTTP(w, r)
-
-		if !nextHandlerCalled {
-			t.Errorf("MustHaveSignature() should call next handler in chain")
-			return
-		}
-	})
+func checkResponseBody(t *testing.T, expected, actual string) {
+	if expected != actual {
+		t.Errorf("Expected body <%v>. Got <%v>\n", expected, actual)
+	}
 }
 
 func TestMustHaveWebhook(t *testing.T) {
@@ -229,15 +37,8 @@ func TestMustHaveWebhook(t *testing.T) {
 
 		handler.ServeHTTP(w, r)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("MustHaveWebhook() should set http code to %v", http.StatusNotFound)
-			return
-		}
-
-		if w.Body.String() != "webhook does not exist\n" {
-			t.Errorf("MustHaveWebhook() should set body to <%v>, was <%v>", "webhook does not exist", w.Body.String())
-			return
-		}
+		checkResponseCode(t, http.StatusNotFound, w.Code)
+		checkResponseBody(t, "{\"message\":\"webhook does not exist\"}\n", w.Body.String())
 	})
 	t.Run("Webhook should be put in context", func(t *testing.T) {
 		wh, _ := webhook.New(webhook.CreateWebhookRequest{
@@ -260,11 +61,11 @@ func TestMustHaveWebhook(t *testing.T) {
 			}
 		})
 
-		handler := MustHaveWebhook(dummyHandler)
-
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest("POST", "/hook/" + wh.Id, nil)
+		r = mux.SetURLVars(r, map[string]string{"id": wh.Id})
 
+		handler := MustHaveWebhook(dummyHandler)
 		handler.ServeHTTP(w, r)
 
 		if !nextHandlerCalled {
@@ -275,6 +76,55 @@ func TestMustHaveWebhook(t *testing.T) {
 }
 
 func TestMustHaveValidSignature(t *testing.T) {
+	t.Run("No header should fail", func(t *testing.T) {
+		dummyHandler := http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
+			t.Errorf("MustHaveSignature() should not call next handler in chain")
+		})
+
+		handler := MustHaveValidSignature(dummyHandler)
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/", nil)
+
+		handler.ServeHTTP(w, r)
+
+		checkResponseCode(t, http.StatusBadRequest, w.Code)
+		checkResponseBody(t, "{\"message\":\"malformed signature header\"}\n", w.Body.String())
+	})
+
+	t.Run("Invalid header should fail", func(t *testing.T) {
+		dummyHandler := http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
+			t.Errorf("MustHaveSignature() should not call next handler in chain")
+		})
+
+		handler := MustHaveValidSignature(dummyHandler)
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/", nil)
+		r.Header.Set("X-Hub-Signature", "foo")
+
+		handler.ServeHTTP(w, r)
+
+		checkResponseCode(t, http.StatusBadRequest, w.Code)
+		checkResponseBody(t, "{\"message\":\"malformed signature header\"}\n", w.Body.String())
+	})
+	t.Run("Invalid algo should fail", func(t *testing.T) {
+		dummyHandler := http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
+			t.Errorf("MustHaveSignature() should not call next handler in chain")
+		})
+
+		handler := MustHaveValidSignature(dummyHandler)
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/", nil)
+		r.Header.Set("X-Hub-Signature", "sha2=aebfc")
+
+		handler.ServeHTTP(w, r)
+
+		checkResponseCode(t, http.StatusBadRequest, w.Code)
+		checkResponseBody(t, "{\"message\":\"malformed signature header, unknown algo\"}\n", w.Body.String())
+	})
+
 	t.Run("Invalid signature should fail", func(t *testing.T) {
 		wh, _ := webhook.New(webhook.CreateWebhookRequest{
 			"my-cool-webhook2",
@@ -289,24 +139,16 @@ func TestMustHaveValidSignature(t *testing.T) {
 			t.Errorf("MustHaveValidSignature() should not call next handler in chain")
 		})
 
-		handler := ReadRequestBodyHandler(MustHaveValidSignature(dummyHandler))
-
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest("POST", "/hook/" + wh.Id, strings.NewReader("Hello, World! This message has been altered."))
-
+		r = mux.SetURLVars(r, map[string]string{"id": wh.Id})
 		r.Header.Set("X-Hub-Signature", "sha1=" + givenSignature)
 
+		handler := ReadRequestBodyHandler(MustHaveWebhook(MustHaveValidSignature(dummyHandler)))
 		handler.ServeHTTP(w, r)
 
-		if w.Code != http.StatusForbidden {
-			t.Errorf("MustHaveValidSignature() should set http code to %v", http.StatusForbidden)
-			return
-		}
-
-		if w.Body.String() != "invalid signature\n" {
-			t.Errorf("MustHaveValidSignature() should set body to <%v>, was <%v>", "invalid signature", w.Body.String())
-			return
-		}
+		checkResponseCode(t, http.StatusForbidden, w.Code)
+		checkResponseBody(t, "{\"message\":\"invalid signature\"}\n", w.Body.String())
 	})
 
 	t.Run("Valid signature should pass", func(t *testing.T) {
@@ -324,11 +166,11 @@ func TestMustHaveValidSignature(t *testing.T) {
 			nextHandlerCalled = true
 		})
 
-		handler := ReadRequestBodyHandler(MustHaveValidSignature(dummyHandler))
+		handler := ReadRequestBodyHandler(MustHaveWebhook(MustHaveValidSignature(dummyHandler)))
 
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest("POST", "/hook/" + wh.Id, strings.NewReader("Hello, World!"))
-
+		r = mux.SetURLVars(r, map[string]string{"id": wh.Id})
 		r.Header.Set("X-Hub-Signature", "sha1=" + givenSignature)
 
 		handler.ServeHTTP(w, r)
