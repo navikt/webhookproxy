@@ -12,7 +12,22 @@ import (
 	"io/ioutil"
 	"net/url"
 	"github.com/navikt/webhookproxy/errors"
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+var (
+	webhookProxyRequestCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{Name: "webhooks_proxy_requests", Help: "number of requests proxied per hook"}, []string{"hook"},
+	)
+	webhooksCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{Name: "webhooks_count", Help: "number of webhooks"},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(webhookProxyRequestCount)
+	prometheus.MustRegister(webhooksCounter)
+}
 
 var proxyClient = &http.Client{
 	Timeout: time.Second * 5,
@@ -40,6 +55,8 @@ func (s *server) handlePingEvent(w http.ResponseWriter, r *http.Request) error {
 func (s *server) proxyHook(w http.ResponseWriter, r *http.Request) error {
 	w.WriteHeader(http.StatusOK)
 	wh := context.WebhookFromContext(r.Context())
+
+	webhookProxyRequestCount.With(prometheus.Labels{"hook": wh.Id}).Inc()
 
 	fmt.Printf("Forwarding request to %v\n", wh.Url)
 	res, err := proxyClient.Post(wh.Url, "application/json", bytes.NewReader(context.RequestBodyFromContext(r.Context())))
@@ -79,7 +96,6 @@ func (s *server) listWebhooks(w http.ResponseWriter, r *http.Request) error {
 		if _, err := s.urlForWebhook(wh); err != nil {
 			return errors.NewAppError(http.StatusInternalServerError, err.Error())
 		}
-		//webhooks[key].ProxyUrl = u.String()
 	}
 
 	encoder := json.NewEncoder(w)
@@ -121,6 +137,8 @@ func (s *server) newWebhook(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+
+	webhooksCounter.Inc()
 
 	if _, err := s.urlForWebhook(wh); err != nil {
 		return errors.NewAppError(http.StatusInternalServerError, err.Error())
